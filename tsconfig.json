@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "lib": ["ES2021.String"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "target": "es6",

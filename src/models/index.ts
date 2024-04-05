@@ -1,9 +1,14 @@
 import UserModel from './User';
 import ProblemModel from './Problem';
 import SolutionModel from './Solution';
+import mongoose from 'mongoose';
+import { Database } from '../types/database';
 
-export default {
-  UserModel,
-  ProblemModel,
-  SolutionModel,
+const Models: Database = {
+  mongoose,
+  User: UserModel,
+  Problem: ProblemModel,
+  Solution: SolutionModel,
 };
+
+export default Models;
