@@ -3,7 +3,7 @@ Make sure you have npm and nvm installed (download nvm for windows here https://
 Server setup:
 ```
 # clone this repo
-nvm install 16.13.2 # use node v16.13.2
+nvm install 21.6.2 # use node v21.6.2
 npm i               # install dependencies
 
 # contact me for database connection info for the .env file
