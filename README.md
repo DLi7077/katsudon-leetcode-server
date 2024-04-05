@@ -4,7 +4,7 @@ Server setup:
 
 ```
 # clone this repo
-nvm install 21.6.2 # use node v21.6.2
+nvm install 18.16.1 # use node v18.16.1
 npm i               # install dependencies
 
 # contact me for database connection info for the .env file
