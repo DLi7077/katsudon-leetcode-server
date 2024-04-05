@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import generateRoutes from './routes';
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -13,3 +14,4 @@ app.listen(port, async () => {
   console.log(`Test apis with http://localhost:${port}/api`);
 });
 
+generateRoutes(app);
