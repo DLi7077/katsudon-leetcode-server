@@ -1,8 +1,10 @@
+import { PipelineStage } from 'mongoose';
 import Models from '../models';
 import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
-import { throwUnexpected } from '../utils/errors';
-import { getTextLength, toObjectId } from '../utils/mongoose';
+import { throwUnexpectedAsHttpError } from '../utils/errors';
+import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
+import { CreateSolutionRequestBody, ProblemSolutions } from '../types/solutions';
 
 /**
  * Creates a solution from a request body
@@ -68,14 +70,115 @@ async function create(
     if (error satisfies HttpError) {
       throw { status: error.status, message: 'Transaction Failed: ' + error.message };
     }
-    throwUnexpected(error);
+    throwUnexpectedAsHttpError(error);
   } finally {
     await session.endSession();
   }
 }
 
+// Returns the main aggregate pipeline stages that will aggregate into solutions grouped by problems
+// This will be in the format of the ProblemSolutions interface (from src/types/solutions.d.ts).
+// The solutions will be the most recent solution grouped by language.
+// All languages in this ProblemSolutions.solution array will be unique
+function findSolutionsByProblemPipelineStages(): PipelineStage[] {
+  const pickFirstSolutionByProblemAndLanguage: PipelineStage = {
+    $group: {
+      _id: {
+        problem_id: '$problem_id',
+        language: '$solution_language',
+      },
+      solution: { $first: '$$ROOT' },
+    },
+  };
+  const groupSolutionsByProblem: PipelineStage = {
+    $group: {
+      _id: '$_id.problem_id',
+      solutions: { $push: '$solution' },
+    },
+  };
+  const lookupProblem: PipelineStage = {
+    $lookup: {
+      from: 'problems',
+      localField: '_id',
+      foreignField: '_id',
+      as: 'problem',
+    },
+  };
+  const unwindProblemFromArray: PipelineStage = {
+    $unwind: '$problem',
+  };
+  const projectData: PipelineStage = {
+    $project: {
+      _id: false,
+      solutions: true,
+      problem: true,
+    },
+  };
+
+  return [
+    pickFirstSolutionByProblemAndLanguage,
+    groupSolutionsByProblem,
+    lookupProblem,
+    unwindProblemFromArray,
+    projectData,
+  ];
+}
+
+/**
+ * Picks the first solution by problem and language, sorted by created time
+ * @param {ObjectId} userId user solutions to query for
+ * @returns SolutionAttributes[]
+ */
+async function findUserSolutions(
+  userId: string,
+  query: any,
+  skip = 0,
+  limit = 50
+): Promise<Paginated<ProblemSolutions>> {
+  try {
+    const matchUser: PipelineStage = { $match: { user_id: toObjectId(userId) } };
+    const sortByLatestDate: PipelineStage = { $sort: { created_at: -1 } };
+
+    const groupSolutionsByProblemAndLanguage = findSolutionsByProblemPipelineStages();
+
+    // https://www.mongodb.com/docs/manual/reference/operator/aggregation/map/
+    const addLastSolvedField: PipelineStage = {
+      $addFields: {
+        lastSolved: {
+          $max: {
+            $map: {
+              input: '$solutions',
+              as: 'solution',
+              in: '$$solution.created_at',
+            },
+          },
+        },
+      },
+    };
+    const sortByLastSolved: PipelineStage = {
+      $sort: { lastSolved: -1 },
+    };
+    const paginationPipelineStages = createPaginationPipelineStages(skip, limit);
+
+    const aggregateResult = (await Models.Solution.aggregate([
+      matchUser,
+      sortByLatestDate,
+      ...groupSolutionsByProblemAndLanguage,
+      addLastSolvedField,
+      sortByLastSolved,
+      ...paginationPipelineStages,
+    ])) as Paginated<ProblemSolutions>[];
+
+    // data will be aggregated into one document, which contains the pagination
+    return aggregateResult[0];
+  } catch (error) {
+    throwUnexpectedAsHttpError(error);
+  }
+}
+
 const SolutionService = {
   create,
+  findUserSolutions,
 };
 
 export default SolutionService;
