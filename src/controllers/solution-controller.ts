@@ -5,6 +5,15 @@ export async function createSolution(request: Request, response: Response, next:
   try {
     const result = await SolutionService.create(request.body);
 
+    response.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getUserSolutions(request: Request, response: Response, next: NextFunction) {
+  try {
+    const result = await SolutionService.findUserSolutions(request.query.userId as string, {});
     response.status(200).json(result);
   } catch (error) {
     next(error);
