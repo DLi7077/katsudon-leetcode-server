@@ -1,3 +1,4 @@
+import { SOLUTION_SORTABLES, SORT_DIRECTIONS } from '../constants';
 import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
 
@@ -20,4 +21,14 @@ export interface CreateSolutionRequestBody {
 export interface ProblemSolutions {
   problem: ProblemAttributes;
   solutions: SolutionAttributes[];
+}
+
+export interface SolutionFilterable {
+  solution_language?: string;
+  failed?: boolean;
+}
+
+export interface SolutionSortable {
+  sortBy?: (typeof SOLUTION_SORTABLES)[number];
+  sortDir?: (typeof SORT_DIRECTIONS)[number];
 }
