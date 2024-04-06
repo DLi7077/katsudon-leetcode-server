@@ -163,7 +163,16 @@ async function findUserSolutions(
     const groupSolutionsByProblemAndLanguage = findSolutionsByProblemPipelineStages();
     const preAggregationSolutionFilters: PipelineStage[] = SOLUTION_FILTERABLE_KEYS.filter(
       (key) => !!queryParams[key]
-    ).map((key) => ({ $match: { [key]: queryParams[key] } }));
+    ).map((key) => {
+      switch (key) {
+        case 'failed': // boolean
+          return { $match: { [key]: JSON.parse(queryParams[key] as any) } };
+        default: // string
+          return { $match: { [key]: queryParams[key] } };
+      }
+    });
+
+    console.log(JSON.stringify(preAggregationSolutionFilters));
 
     const sortByMostRecent: PipelineStage = { $sort: { created_at: -1 } };
 
