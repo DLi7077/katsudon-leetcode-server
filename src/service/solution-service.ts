@@ -5,6 +5,7 @@ import { SolutionAttributes } from '../models/Solution';
 import { throwUnexpectedAsHttpError } from '../utils/errors';
 import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
 import { CreateSolutionRequestBody, ProblemSolutions } from '../types/solutions';
+import { PROBLEM_FILTERABLE_KEYS, SOLUTION_FILTERABLE_KEYS } from '../constants';
 
 /**
  * Creates a solution from a request body
@@ -114,6 +115,23 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
       problem: true,
     },
   };
+  const addLastSolvedField: PipelineStage = {
+    $addFields: {
+      lastSolved: {
+        $max: {
+          // https://www.mongodb.com/docs/manual/reference/operator/aggregation/map/
+          $map: {
+            input: '$solutions',
+            as: 'solution',
+            in: '$$solution.created_at',
+          },
+        },
+      },
+    },
+  };
+  const sortByLastSolved: PipelineStage = {
+    $sort: { lastSolved: -1 },
+  };
 
   return [
     pickFirstSolutionByProblemAndLanguage,
@@ -121,6 +139,8 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
     lookupProblem,
     unwindProblemFromArray,
     projectData,
+    addLastSolvedField,
+    sortByLastSolved,
   ];
 }
 
@@ -131,41 +151,38 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
  */
 async function findUserSolutions(
   userId: string,
-  query: any,
-  skip = 0,
-  limit = 50
+  queryParams: Record<string, any>,
+  skip: number,
+  limit: number
 ): Promise<Paginated<ProblemSolutions>> {
   try {
-    const matchUser: PipelineStage = { $match: { user_id: toObjectId(userId) } };
+    const matchUser: PipelineStage = {
+      $match: { user_id: toObjectId(userId) },
+    };
+    const groupSolutionsByProblemAndLanguage = findSolutionsByProblemPipelineStages();
+    const preAggregationSolutionFilters: PipelineStage[] = SOLUTION_FILTERABLE_KEYS.filter(
+      (key) => !!queryParams[key]
+    ).map((key) => ({ $match: { [key]: queryParams[key] } }));
+
     const sortByLatestDate: PipelineStage = { $sort: { created_at: -1 } };
 
-    const groupSolutionsByProblemAndLanguage = findSolutionsByProblemPipelineStages();
-
-    // https://www.mongodb.com/docs/manual/reference/operator/aggregation/map/
-    const addLastSolvedField: PipelineStage = {
-      $addFields: {
-        lastSolved: {
-          $max: {
-            $map: {
-              input: '$solutions',
-              as: 'solution',
-              in: '$$solution.created_at',
-            },
-          },
-        },
-      },
-    };
-    const sortByLastSolved: PipelineStage = {
-      $sort: { lastSolved: -1 },
-    };
     const paginationPipelineStages = createPaginationPipelineStages(skip, limit);
+
+    const postAggregationProblemFilters: PipelineStage[] = PROBLEM_FILTERABLE_KEYS.filter(
+      (key) => !!queryParams[key]
+    ).map((key) => {
+      // if tags is array, use includes operator instead of exact match
+      return { $match: { [`problem.${key}`]: key === 'tags' ? { $in: queryParams[key] } : queryParams[key] } };
+    });
+
+    console.log(JSON.stringify(postAggregationProblemFilters));
 
     const aggregateResult = (await Models.Solution.aggregate([
       matchUser,
+      ...preAggregationSolutionFilters,
       sortByLatestDate,
       ...groupSolutionsByProblemAndLanguage,
-      addLastSolvedField,
-      sortByLastSolved,
+      ...postAggregationProblemFilters,
       ...paginationPipelineStages,
     ])) as Paginated<ProblemSolutions>[];
 
