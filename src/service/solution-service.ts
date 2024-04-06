@@ -4,8 +4,9 @@ import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
 import { throwUnexpectedAsHttpError } from '../utils/errors';
 import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
-import { CreateSolutionRequestBody, ProblemSolutions } from '../types/solutions';
-import { PROBLEM_FILTERABLE_KEYS, SOLUTION_FILTERABLE_KEYS } from '../constants';
+import { CreateSolutionRequestBody, ProblemSolutions, SolutionFilterable, SolutionSortable } from '../types/solutions';
+import { PROBLEM_FILTERABLE_KEYS, SOLUTION_FILTERABLE_KEYS, SOLUTION_SORTABLES } from '../constants';
+import { ProblemFilterable } from '../types/problem';
 
 /**
  * Creates a solution from a request body
@@ -151,7 +152,7 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
  */
 async function findUserSolutions(
   userId: string,
-  queryParams: Record<string, any>,
+  queryParams: SolutionFilterable & SolutionSortable & ProblemFilterable,
   skip: number,
   limit: number
 ): Promise<Paginated<ProblemSolutions>> {
@@ -164,7 +165,7 @@ async function findUserSolutions(
       (key) => !!queryParams[key]
     ).map((key) => ({ $match: { [key]: queryParams[key] } }));
 
-    const sortByLatestDate: PipelineStage = { $sort: { created_at: -1 } };
+    const sortByMostRecent: PipelineStage = { $sort: { created_at: -1 } };
 
     const paginationPipelineStages = createPaginationPipelineStages(skip, limit);
 
@@ -175,12 +176,15 @@ async function findUserSolutions(
       return { $match: { [`problem.${key}`]: key === 'tags' ? { $in: queryParams[key] } : queryParams[key] } };
     });
 
-    console.log(JSON.stringify(postAggregationProblemFilters));
+    const preAggregationSolutionSorting: PipelineStage[] = !!queryParams.sortBy
+      ? [{ $sort: { [queryParams.sortBy]: queryParams.sortDir === 'asc' ? 1 : -1 } }]
+      : [];
 
     const aggregateResult = (await Models.Solution.aggregate([
       matchUser,
       ...preAggregationSolutionFilters,
-      sortByLatestDate,
+      sortByMostRecent,
+      ...preAggregationSolutionSorting, // overwrites sort by most recent if provided
       ...groupSolutionsByProblemAndLanguage,
       ...postAggregationProblemFilters,
       ...paginationPipelineStages,
