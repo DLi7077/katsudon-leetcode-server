@@ -1,12 +1,17 @@
 import { PipelineStage } from 'mongoose';
+import { PROBLEM_FILTERABLE_KEYS, PROBLEM_SORTABLES, SOLUTION_FILTERABLE_KEYS, SORT_DIRECTIONS } from '../constants';
 import Models from '../models';
 import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
+import { ProblemFilterable } from '../types/problem';
+import {
+  CreateSolutionRequestBody,
+  ProblemSolutions,
+  ProblemSortable,
+  SolutionFilterable
+} from '../types/solutions';
 import { throwUnexpectedAsHttpError } from '../utils/errors';
 import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
-import { CreateSolutionRequestBody, ProblemSolutions, SolutionFilterable, SolutionSortable } from '../types/solutions';
-import { PROBLEM_FILTERABLE_KEYS, SOLUTION_FILTERABLE_KEYS } from '../constants';
-import { ProblemFilterable } from '../types/problem';
 
 /**
  * Creates a solution from a request body
@@ -152,6 +157,17 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
   ];
 }
 
+function generateProblemSortPipelineStage(
+  sortBy?: (typeof PROBLEM_SORTABLES)[number],
+  sortDir?: SORT_DIRECTIONS
+): PipelineStage[] {
+  if (!sortBy) return [];
+  if (sortBy == 'lastSolved') {
+    return [{ $sort: { [sortBy]: sortDir === 'asc' ? 1 : -1 } }];
+  }
+  return [{ $sort: { [`problem.${sortBy}`]: sortDir === 'asc' ? 1 : -1 } }];
+}
+
 /**
  * Picks the first solution by problem and language, sorted by created time
  * @param {ObjectId} userId user solutions to query for
@@ -159,7 +175,7 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
  */
 async function findUserSolutions(
   userId: string,
-  queryParams: SolutionFilterable & SolutionSortable & ProblemFilterable,
+  queryParams: SolutionFilterable & ProblemFilterable & ProblemSortable,
   skip: number,
   limit: number
 ): Promise<Paginated<ProblemSolutions>> {
@@ -190,17 +206,18 @@ async function findUserSolutions(
       return { $match: { [`problem.${key}`]: key === 'tags' ? { $in: queryParams[key] } : queryParams[key] } };
     });
 
-    const preAggregationSolutionSorting: PipelineStage[] = !!queryParams.sortBy
-      ? [{ $sort: { [queryParams.sortBy]: queryParams.sortDir === 'asc' ? 1 : -1 } }]
-      : [];
+    const postAggregationProblemSorting: PipelineStage[] = generateProblemSortPipelineStage(
+      queryParams.sortBy,
+      queryParams.sortDir
+    );
 
     const aggregateResult = (await Models.Solution.aggregate([
       matchUser,
       ...preAggregationSolutionFilters,
       sortByMostRecent,
-      ...preAggregationSolutionSorting, // overwrites sort by most recent if provided
       ...groupSolutionsByProblemAndLanguage,
       ...postAggregationProblemFilters,
+      ...postAggregationProblemSorting,
       ...paginationPipelineStages,
     ])) as Paginated<ProblemSolutions>[];
 

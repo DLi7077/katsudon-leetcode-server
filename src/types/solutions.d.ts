@@ -1,4 +1,4 @@
-import { SOLUTION_SORTABLES, SORT_DIRECTIONS } from '../constants';
+import { PROBLEM_SORTABLES, SORT_DIRECTIONS } from '../constants';
 import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
 
@@ -28,7 +28,7 @@ export interface SolutionFilterable {
   failed?: boolean;
 }
 
-export interface SolutionSortable {
-  sortBy?: (typeof SOLUTION_SORTABLES)[number];
-  sortDir?: (typeof SORT_DIRECTIONS)[number];
+export interface ProblemSortable {
+  sortBy?: (typeof PROBLEM_SORTABLES)[number];
+  sortDir?: SORT_DIRECTIONS;
 }
