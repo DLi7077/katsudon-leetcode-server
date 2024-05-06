@@ -4,12 +4,7 @@ import Models from '../models';
 import { ProblemAttributes } from '../models/Problem';
 import { SolutionAttributes } from '../models/Solution';
 import { ProblemFilterable } from '../types/problem';
-import {
-  CreateSolutionRequestBody,
-  ProblemSolutions,
-  ProblemSortable,
-  SolutionFilterable
-} from '../types/solutions';
+import { CreateSolutionRequestBody, ProblemSolutions, ProblemSortable, SolutionFilterable } from '../types/solutions';
 import { throwUnexpectedAsHttpError } from '../utils/errors';
 import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
 
@@ -124,7 +119,13 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
   const projectData: PipelineStage = {
     $project: {
       _id: false,
-      solutions: true,
+      solutions: {
+        // sort by most recent
+        $sortArray: {
+          input: '$solutions',
+          sortBy: { created_at: -1 },
+        },
+      },
       problem: true,
     },
   };
