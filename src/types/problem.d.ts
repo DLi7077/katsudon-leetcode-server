@@ -5,3 +5,13 @@ export interface ProblemFilterable {
   tags?: string[];
   id: number;
 }
+
+export interface ProblemTagFilterable {
+  userId?: string;
+  tags?: string[];
+}
+
+export type ProblemTagCount = {
+  tag: string;
+  count: number;
+};
