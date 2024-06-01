@@ -204,7 +204,12 @@ async function findUserSolutions(
       (key) => !!queryParams[key]
     ).map((key) => {
       // if tags is array, use includes operator instead of exact match
-      return { $match: { [`problem.${key}`]: key === 'tags' ? { $in: queryParams[key] } : queryParams[key] } };
+      switch (key) {
+        case 'tags':
+          return { $match: { [`problem.${key}`]: { $all: queryParams[key] } } };
+        default:
+          return { $match: { [`problem.${key}`]: queryParams[key] } };
+      }
     });
 
     const postAggregationProblemSorting: PipelineStage[] = generateProblemSortPipelineStage(
