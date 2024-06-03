@@ -4,6 +4,7 @@ import Models from '../models';
 import { UserAttributes } from '../models/User';
 import UserService from '../service/user-service';
 import Auth from '../utils/Auth';
+import { assert } from 'console';
 
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
   const requestBody = req.body as UserAttributes;
@@ -78,6 +79,15 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     res.status(403).send('Invalid Token');
     return;
   }
+}
+
+export function verifyGuard(req: Request, res: Response, next: NextFunction): void {
+  if (!req.currentUser.verified) {
+    res.status(401);
+    res.send('You must be verified to do this');
+  }
+
+  next();
 }
 
 export function presentUser(req: Request, res: Response): void {
