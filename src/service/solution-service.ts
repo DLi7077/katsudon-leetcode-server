@@ -7,6 +7,7 @@ import { ProblemFilterable } from '../types/problem';
 import { CreateSolutionRequestBody, ProblemSolutions, ProblemSortable, SolutionFilterable } from '../types/solutions';
 import { throwUnexpectedAsHttpError } from '../utils/errors';
 import { createPaginationPipelineStages, getTextLength, toObjectId } from '../utils/mongoose';
+import UserService from './user-service';
 
 /**
  * Creates a solution from a request body
@@ -68,6 +69,9 @@ async function create(
     };
 
     const createdSolution: SolutionAttributes[] = await Models.Solution.create([solutionData], { session });
+
+    // set updated_at field to current time
+    await UserService.update({ _id: toObjectId(data.user_id) }, { session });
 
     await session.commitTransaction();
 
@@ -148,6 +152,7 @@ function findSolutionsByProblemPipelineStages(): PipelineStage[] {
   };
 
   return [
+    sortByLastSolved,
     pickFirstSolutionByProblemAndLanguage,
     groupSolutionsByProblem,
     lookupProblem,
