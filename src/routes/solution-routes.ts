@@ -1,5 +1,6 @@
 import express from 'express';
-import { createSolution, getUserSolutions, errorHandler } from '../controllers/solution-controller';
+import { errorHandler } from '../controllers/middleware';
+import { createSolution, getUserSolutions } from '../controllers/solution-controller';
 
 const solutionRoutes = express.Router();
 

@@ -4,6 +4,7 @@ import Models from '../models';
 import { UserAttributes } from '../models/User';
 import UserService from '../service/user-service';
 import Auth from '../utils/Auth';
+import { ObjectId } from 'mongoose';
 
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
   const requestBody = req.body as UserAttributes;
@@ -52,41 +53,28 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
   next();
 }
 
-export async function authenticateToken(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const authHeader = req.headers.authorization;
-  const token = (authHeader && authHeader.split(' ')[1]) ?? '';
-
-  if (!token) {
-    res.status(401).send('Forbidden');
-    return;
-  }
+export async function follow(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const responseBody = req.body as { follow: ObjectId };
 
   try {
-    const userFromToken = Auth.getUserFromToken(token) as UserLoginProps;
-    const userEmail = userFromToken.email;
-    const foundUser = await UserService.findByEmail(userEmail);
-
-    if (!foundUser) {
-      res.status(404).send('No user found with email ' + userEmail);
-      return;
-    }
-
-    req.currentUser = foundUser;
-    next();
+    const followResult = await UserService.follow(req.currentUser._id, responseBody.follow);
+    res.status(201);
+    res.send(followResult);
   } catch (error) {
-    console.error(error);
-    res.status(403).send('Invalid Token');
-    return;
+    next(error);
   }
 }
 
-export function verifyGuard(req: Request, res: Response, next: NextFunction): void {
-  if (!req.currentUser.verified) {
-    res.status(401);
-    res.send('You must be verified to do this');
-  }
+export async function unfollow(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const responseBody = req.body as { follow: ObjectId };
 
-  next();
+  try {
+    const unfollowResult = await UserService.unfollow(req.currentUser._id, responseBody.follow);
+    res.status(201);
+    res.send(unfollowResult);
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function findAll(req: Request, res: Response, next: NextFunction): Promise<void> {

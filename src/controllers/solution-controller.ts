@@ -36,8 +36,3 @@ export async function getUserSolutions(request: Request, response: Response, nex
     next(error);
   }
 }
-
-export async function errorHandler(error: HttpError, request: Request, response: Response, next: NextFunction) {
-  console.log(error);
-  response.status(error.status).send({ error: error.message });
-}

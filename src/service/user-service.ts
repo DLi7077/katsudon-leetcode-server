@@ -3,6 +3,8 @@ import { ObjectId, QueryOptions } from 'mongoose';
 import Models from '../models';
 import { UserAttributes } from '../models/User';
 import Auth from '../utils/Auth';
+import { PUBLIC_USER_FIELDS } from '../constants';
+import { throwUnexpectedAsHttpError } from '../utils/errors';
 
 async function create(attributes: UserAttributes): Promise<UserAttributes> {
   const hashedPassword = await Auth.hashPassword(attributes.password);
@@ -35,6 +37,95 @@ async function update(
   }).lean();
 }
 
+async function follow(
+  devinId: ObjectId,
+  jasonId: ObjectId
+): Promise<[Partial<UserAttributes>, Partial<UserAttributes>]> {
+  const session = await Models.Solution.startSession();
+  session.startTransaction();
+
+  try {
+    const devinNotFound: boolean = !(await Models.User.exists({ _id: devinId }));
+    const jasonNotFound: boolean = !(await Models.User.exists({ _id: jasonId }));
+
+    if (devinNotFound) {
+      throw { status: 404, message: `User not found with id ${devinId}` };
+    }
+    if (jasonNotFound) {
+      throw { status: 404, message: `User not found with id ${jasonId}` };
+    }
+
+    const devinFollowingJason: UserAttributes | null = await Models.User.findByIdAndUpdate(
+      { _id: devinId },
+      { $addToSet: { following: jasonId } },
+      { new: true }
+    ).lean();
+
+    const jasonFollowedByDevin: UserAttributes | null = await Models.User.findByIdAndUpdate(
+      { _id: jasonId },
+      { $addToSet: { followers: devinId } },
+      { new: true }
+    ).lean();
+
+    await update({ _id: devinId }, { session });
+    await update({ _id: jasonId }, { session });
+
+    await session.commitTransaction();
+    const displayFields = [...PUBLIC_USER_FIELDS, 'followers', 'following'];
+
+    return [_.pick(devinFollowingJason, displayFields)!, _.pick(jasonFollowedByDevin!, displayFields)];
+  } catch (error: any) {
+    if (error satisfies HttpError) {
+      throw { status: error.status, message: 'Transaction Failed: ' + error.message };
+    }
+    throwUnexpectedAsHttpError(error);
+  } finally {
+    await session.endSession();
+  }
+}
+
+async function unfollow(
+  devinId: ObjectId,
+  jasonId: ObjectId
+): Promise<[Partial<UserAttributes>, Partial<UserAttributes>]> {
+  const session = await Models.Solution.startSession();
+  session.startTransaction();
+  try {
+    const devinNotFound: boolean = !(await Models.User.exists({ _id: devinId }));
+    const jasonNotFound: boolean = !(await Models.User.exists({ _id: jasonId }));
+
+    if (devinNotFound) {
+      throw { status: 404, message: `User not found with id ${devinId}` };
+    }
+    if (jasonNotFound) {
+      throw { status: 404, message: `User not found with id ${jasonId}` };
+    }
+
+    const devinUnfollowsJason: UserAttributes | null = await Models.User.findByIdAndUpdate(
+      { _id: devinId },
+      { $pull: { following: jasonId } },
+      { new: true }
+    ).lean();
+
+    const jasonUnfollowedByDevin: UserAttributes | null = await Models.User.findByIdAndUpdate(
+      { _id: jasonId },
+      { $pull: { followers: devinId } },
+      { new: true }
+    ).lean();
+
+    const displayFields = [...PUBLIC_USER_FIELDS, 'followers', 'following'];
+
+    return [_.pick(devinUnfollowsJason, displayFields)!, _.pick(jasonUnfollowedByDevin!, displayFields)];
+  } catch (error: any) {
+    if (error satisfies HttpError) {
+      throw { status: error.status, message: 'Transaction Failed: ' + error.message };
+    }
+    throwUnexpectedAsHttpError(error);
+  } finally {
+    await session.endSession();
+  }
+}
+
 async function findByEmail(email: string): Promise<UserAttributes | null> {
   return Models.User.findOne({ email, deleted_at: null }).lean();
 }
@@ -60,6 +151,8 @@ async function findAll(): Promise<Paginated<Partial<UserAttributes>>> {
 export default {
   create,
   update,
+  follow,
+  unfollow,
   findByEmail,
   findById,
   findAll,
