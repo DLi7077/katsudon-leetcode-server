@@ -1,8 +1,8 @@
-import Models from '../models';
 import _ from 'lodash';
+import { ObjectId, QueryOptions } from 'mongoose';
+import Models from '../models';
 import { UserAttributes } from '../models/User';
 import Auth from '../utils/Auth';
-import { ObjectId } from 'mongoose';
 
 async function create(attributes: UserAttributes): Promise<UserAttributes> {
   const hashedPassword = await Auth.hashPassword(attributes.password);
@@ -17,7 +17,10 @@ async function create(attributes: UserAttributes): Promise<UserAttributes> {
   });
 }
 
-async function update(attributes: Partial<UserAttributes>): Promise<UserAttributes | null> {
+async function update(
+  attributes: Partial<UserAttributes>,
+  additionalOptions: Partial<QueryOptions> = {}
+): Promise<UserAttributes | null> {
   const { _id } = attributes;
 
   const updateAttributes = {
@@ -28,6 +31,7 @@ async function update(attributes: Partial<UserAttributes>): Promise<UserAttribut
   return Models.User.findByIdAndUpdate({ _id }, updateAttributes, {
     runValidators: true,
     new: true,
+    ...additionalOptions,
   }).lean();
 }
 
@@ -39,15 +43,17 @@ async function findById(user_id: ObjectId): Promise<UserAttributes | null> {
   return Models.User.findOne({ _id: user_id }).lean();
 }
 
-async function findAll(queryParams: any): Promise<Paginated<UserAttributes>> {
-  const users = await Models.User.find({
-    ...queryParams,
-    verified: true,
-  });
+async function findAll(): Promise<Paginated<Partial<UserAttributes>>> {
+  const users: UserAttributes[] = await Models.User.aggregate([
+    { $match: { verified: true } },
+    { $sort: { updated_at: -1, created_at: -1 } },
+  ]);
+
+  const usersPresentable = users.map((user) => _.pick(user, ['_id', 'username', 'profile_picture_url']));
 
   return {
     count: users.length,
-    rows: users,
+    rows: usersPresentable,
   };
 }
 

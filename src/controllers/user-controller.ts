@@ -4,7 +4,6 @@ import Models from '../models';
 import { UserAttributes } from '../models/User';
 import UserService from '../service/user-service';
 import Auth from '../utils/Auth';
-import { assert } from 'console';
 
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
   const requestBody = req.body as UserAttributes;
@@ -88,6 +87,13 @@ export function verifyGuard(req: Request, res: Response, next: NextFunction): vo
   }
 
   next();
+}
+
+export async function findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const allUsers = await UserService.findAll();
+
+  res.status(200);
+  res.json(allUsers);
 }
 
 export function presentUser(req: Request, res: Response): void {
